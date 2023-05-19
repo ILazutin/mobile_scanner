@@ -52,7 +52,6 @@ class MobileScanner(
     @ExperimentalGetImage
     val captureOutput = ImageAnalysis.Analyzer { imageProxy -> // YUV_420_888 format
         val mediaImage = imageProxy.image ?: return@Analyzer
-        Log.i("Scanner", "width: ${mediaImage.width}, height: ${mediaImage.height}")
         val inputImage = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
 
         if (detectionSpeed == DetectionSpeed.NORMAL && scannerTimeout) {
