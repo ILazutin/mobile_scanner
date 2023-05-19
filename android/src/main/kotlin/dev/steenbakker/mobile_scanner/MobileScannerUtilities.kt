@@ -9,21 +9,64 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import java.io.ByteArrayOutputStream
 
 fun Image.toByteArray(): ByteArray {
-    val yBuffer = planes[0].buffer // Y
-    val vuBuffer = planes[2].buffer // VU
-
-    val ySize = yBuffer.remaining()
-    val vuSize = vuBuffer.remaining()
-
-    val nv21 = ByteArray(ySize + vuSize)
-
-    yBuffer.get(nv21, 0, ySize)
-    vuBuffer.get(nv21, ySize, vuSize)
-
-    val yuvImage = YuvImage(nv21, ImageFormat.NV21, this.width, this.height, null)
+    val yuvImage = YuvImage(yuv420toNV21(), ImageFormat.NV21, this.width, this.height, null)
     val out = ByteArrayOutputStream()
     yuvImage.compressToJpeg(Rect(0, 0, yuvImage.width, yuvImage.height), 50, out)
     return out.toByteArray()
+}
+
+fun Image.yuv420toNV21(): ByteArray {
+    val crop = cropRect
+    val width = crop.width()
+    val height = crop.height()
+    val data = ByteArray(width * height * ImageFormat.getBitsPerPixel(format) / 8)
+    val rowData = ByteArray(planes[0].rowStride)
+    var channelOffset = 0
+    var outputStride = 1
+    for (i in planes.indices) {
+        when (i) {
+            0 -> {
+                channelOffset = 0
+                outputStride = 1
+            }
+
+            1 -> {
+                channelOffset = width * height + 1
+                outputStride = 2
+            }
+
+            2 -> {
+                channelOffset = width * height
+                outputStride = 2
+            }
+        }
+        val buffer = planes[i].buffer
+        val rowStride = planes[i].rowStride
+        val pixelStride = planes[i].pixelStride
+        val shift = if (i == 0) 0 else 1
+        val w = width shr shift
+        val h = height shr shift
+        buffer.position(rowStride * (crop.top shr shift) + pixelStride * (crop.left shr shift))
+        for (row in 0 until h) {
+            var length: Int
+            if (pixelStride == 1 && outputStride == 1) {
+                length = w
+                buffer[data, channelOffset, length]
+                channelOffset += length
+            } else {
+                length = (w - 1) * pixelStride + 1
+                buffer[rowData, 0, length]
+                for (col in 0 until w) {
+                    data[channelOffset] = rowData[col * pixelStride]
+                    channelOffset += outputStride
+                }
+            }
+            if (row < h - 1) {
+                buffer.position(buffer.position() + rowStride - length)
+            }
+        }
+    }
+    return data
 }
 
 val Barcode.data: Map<String, Any?>
