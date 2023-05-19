@@ -72,7 +72,7 @@ fun Image.yuv420toNV21(): ByteArray {
 val Barcode.data: Map<String, Any?>
     get() = mapOf(
         "corners" to cornerPoints?.map { corner -> corner.data }, "format" to format,
-        "rawBytes" to rawBytes, "rawValue" to rawValue, "type" to valueType,
+        "rawBytes" to rawBytes, "rawValue" to rawValue?.trim(), "type" to valueType,
         "calendarEvent" to calendarEvent?.data, "contactInfo" to contactInfo?.data,
         "driverLicense" to driverLicense?.data, "email" to email?.data,
         "geoPoint" to geoPoint?.data, "phone" to phone?.data, "sms" to sms?.data,

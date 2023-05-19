@@ -5,7 +5,6 @@ import android.graphics.Rect
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.util.Size
 import android.view.Surface
 import androidx.camera.core.*
