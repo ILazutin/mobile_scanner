@@ -2,17 +2,25 @@ package dev.steenbakker.mobile_scanner
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.graphics.ImageFormat
 import android.graphics.Rect
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.params.StreamConfigurationMap
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.util.Size
 import android.view.Surface
 import androidx.camera.camera2.internal.compat.CameraCharacteristicsCompat
 import androidx.camera.camera2.internal.compat.quirk.CamcorderProfileResolutionQuirk
 import androidx.camera.camera2.interop.Camera2CameraInfo
-import androidx.camera.core.*
+import androidx.camera.core.Camera
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalGetImage
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
@@ -200,11 +208,19 @@ class MobileScanner(
 
             val characteristics = CameraCharacteristicsCompat.toCameraCharacteristicsCompat(
                 Camera2CameraInfo.extractCameraCharacteristics(camera!!.cameraInfo))
-            val supportedResolutions = CamcorderProfileResolutionQuirk(characteristics).supportedResolutions.sortedByDescending { it.width }
+            var supportedResolutions = CamcorderProfileResolutionQuirk(characteristics).supportedResolutions.sortedByDescending { it.width }
+            if (Build.VERSION.SDK_INT >= 23) {
+                val map: StreamConfigurationMap? =
+                    characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                supportedResolutions =
+                    supportedResolutions + (map?.getHighResolutionOutputSizes(ImageFormat.YUV_420_888)
+                        ?.toList() ?: emptyList<Size>()).sortedByDescending { it.width }
+            }
+
 //            Log.d("SCANNER", supportedResolutions.toString())
 
             val suitableResolutions =
-                supportedResolutions.filter { it.width >= 1920 && it.height.toDouble() / it.width.toDouble() >= 0.7 }
+                supportedResolutions.filter { it.width >= 1920 && ((it.height.toDouble() / it.width.toDouble()) in 0.7..0.8)  }
 
             val targetResolution = suitableResolutions.lastOrNull() ?: supportedResolutions.first()
             // Build the analyzer to be passed on to MLKit
