@@ -208,14 +208,15 @@ class MobileScanner(
 
             val characteristics = CameraCharacteristicsCompat.toCameraCharacteristicsCompat(
                 Camera2CameraInfo.extractCameraCharacteristics(camera!!.cameraInfo))
-            var supportedResolutions = CamcorderProfileResolutionQuirk(characteristics).supportedResolutions.sortedByDescending { it.width }
+            var supportedResolutions = CamcorderProfileResolutionQuirk(characteristics).supportedResolutions
             if (Build.VERSION.SDK_INT >= 23) {
                 val map: StreamConfigurationMap? =
                     characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
                 supportedResolutions =
                     supportedResolutions + (map?.getHighResolutionOutputSizes(ImageFormat.YUV_420_888)
-                        ?.toList() ?: emptyList<Size>()).sortedByDescending { it.width }
+                        ?.toList() ?: emptyList<Size>())
             }
+            supportedResolutions = supportedResolutions.sortedByDescending { it.width }
 
 //            Log.d("SCANNER", supportedResolutions.toString())
 
