@@ -216,6 +216,37 @@ Improvements:
   Fixed this issue by calling resetZoomScale
 * [iOS] Remove zoom animation with ramp function to match Android behavior.
 
+## 1.0.0 (2023-08-05)
+
+
+### Features
+
+* add autoStart parameter ([0847152](https://github.com/ILazutin/mobile_scanner/commit/084715237bb046170802edefce028d05d5b9fd35))
+* add hasTorch function ([4051f8d](https://github.com/ILazutin/mobile_scanner/commit/4051f8dc8d13137c5fdde3ace49ee768fa840844))
+* add hasTorch notifier ([d958afa](https://github.com/ILazutin/mobile_scanner/commit/d958afa493cefcbab04bd0898cc1eff067fc93fb))
+* add return image and refactor existing functions ([aa8298a](https://github.com/ILazutin/mobile_scanner/commit/aa8298a78b88bfd46ebc02b5bdab680eb75a7f1a))
+* add zoomScale api for android and iOS ([a2d04e3](https://github.com/ILazutin/mobile_scanner/commit/a2d04e318fe7e0bd92f98efdbf6b88ea7f396d82))
+* add zoomScale api for android and iOS ([6b0d799](https://github.com/ILazutin/mobile_scanner/commit/6b0d799f7986de22896999bd6e593b57161f3080))
+* **web:** automatically inject js libraries ([0f6bc2f](https://github.com/ILazutin/mobile_scanner/commit/0f6bc2fc37ac364442eea88721b4c8bac3762256))
+* **web:** pass format info to controller ([804457e](https://github.com/ILazutin/mobile_scanner/commit/804457e89e880c9724bd3e6f8616ceae28722f02))
+* **web:** support formats and detectionTimeout arguments ([97213ca](https://github.com/ILazutin/mobile_scanner/commit/97213cacf5ad4e06fda6499d8f01232d72ad047b))
+* **web:** torch support ([077152c](https://github.com/ILazutin/mobile_scanner/commit/077152c72cdc37764b186a1529fa4d5f45ffbd5a))
+
+
+### Bug Fixes
+
+* 544 - explicit returned type for compactMap ([c5c7f39](https://github.com/ILazutin/mobile_scanner/commit/c5c7f39787d852f0599dc2afa26551b5d2a50559))
+* add 'factory' keyword to support breaking change in dart 2.19 ([2491481](https://github.com/ILazutin/mobile_scanner/commit/24914818853488508b86adb6cef66f24eb2bfe94))
+* Fixes Issue [#531](https://github.com/ILazutin/mobile_scanner/issues/531) ([4f5362d](https://github.com/ILazutin/mobile_scanner/commit/4f5362dee17d80ad5cf9db65d5a79f56522e57ff))
+* iOS front camera switching crash issue ([8e21179](https://github.com/ILazutin/mobile_scanner/commit/8e21179da3af1e72a1fc9ca136116fde63d844f7))
+* **ios:** fix initial torch state ([ccdc3c6](https://github.com/ILazutin/mobile_scanner/commit/ccdc3c6208ad5346ea75fc03b3da192420dda0bb))
+* **ios:** fix torch ([ebf52fa](https://github.com/ILazutin/mobile_scanner/commit/ebf52fa4c6ad9d55bd6db450c42e10a2e4a70112))
+* **onDetect:** Fixed bug where onDetect method was being called multiple times. ([7adc4de](https://github.com/ILazutin/mobile_scanner/commit/7adc4de7a647c1d01d3f1c9f4aa2973ec5fcf7c9))
+* **ScanImage:** crash when try to rotate image ([99bd7bd](https://github.com/ILazutin/mobile_scanner/commit/99bd7bd73ec9f6e85dd4d8fbc76a025c92664f3d))
+* should check for the raw bytes instead of string, in case of a malformed utf8 string ([a563906](https://github.com/ILazutin/mobile_scanner/commit/a5639060a387f9bcaa0710b0acd0e4abff36ef97))
+* **web:** fix loading js scripts in debug mode in flutter 3.7 ([5e85a5c](https://github.com/ILazutin/mobile_scanner/commit/5e85a5c1ad3949d43d80207ed8db050f0e0890e0))
+* **web:** waiting for js libs to load ([a2ac745](https://github.com/ILazutin/mobile_scanner/commit/a2ac74505e312a50f83b3bd89ca39e3dddc528de))
+
 ## 3.2.0
 Improvements:
 * [iOS] Updated GoogleMLKit/BarcodeScanning to 4.0.0 
