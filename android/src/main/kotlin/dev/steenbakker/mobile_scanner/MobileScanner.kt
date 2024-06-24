@@ -30,8 +30,11 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import dev.steenbakker.mobile_scanner.objects.DetectionSpeed
 import dev.steenbakker.mobile_scanner.objects.MobileScannerStartParameters
+import dev.steenbakker.mobile_scanner.utils.YuvToRgbConverter
 import io.flutter.view.TextureRegistry
+import java.io.ByteArrayOutputStream
 import kotlin.math.roundToInt
+
 
 class MobileScanner(
     private val activity: Activity,
@@ -48,6 +51,7 @@ class MobileScanner(
     private var scanner = BarcodeScanning.getClient()
     private var lastScanned: List<String?>? = null
     private var scannerTimeout = false
+    private var displayListener: DisplayManager.DisplayListener? = null
 
     /// Configurable variables
     var scanWindow: List<Float>? = null
@@ -74,7 +78,7 @@ class MobileScanner(
         scanner.process(inputImage)
             .addOnSuccessListener { barcodes ->
                 if (detectionSpeed == DetectionSpeed.NO_DUPLICATES) {
-                    val newScannedBarcodes = barcodes.map { barcode -> barcode.rawValue }
+                    val newScannedBarcodes = barcodes.mapNotNull { barcode -> barcode.rawValue }.sorted()
                     if (newScannedBarcodes == lastScanned) {
                         // New scanned is duplicate, returning
                         return@addOnSuccessListener
@@ -97,13 +101,42 @@ class MobileScanner(
                     }
                 }
 
+
                 if (barcodeMap.isNotEmpty()) {
-                    mobileScannerCallback(
-                        barcodeMap,
-                        if (returnImage) mediaImage.toByteArray() else null,
-                        if (returnImage) mediaImage.width else null,
-                        if (returnImage) mediaImage.height else null
-                    )
+                    if (returnImage) {
+
+                        val bitmap = Bitmap.createBitmap(mediaImage.width, mediaImage.height, Bitmap.Config.ARGB_8888)
+
+                        val imageFormat = YuvToRgbConverter(activity.applicationContext)
+
+                        imageFormat.yuvToRgb(mediaImage, bitmap)
+
+                        val bmResult = rotateBitmap(bitmap, camera?.cameraInfo?.sensorRotationDegrees?.toFloat() ?: 90f)
+
+                        val stream = ByteArrayOutputStream()
+                        bmResult.compress(Bitmap.CompressFormat.PNG, 100, stream)
+                        val byteArray = stream.toByteArray()
+                        val bmWidth = bmResult.width
+                        val bmHeight = bmResult.height
+                        bmResult.recycle()
+
+
+                        mobileScannerCallback(
+                            barcodeMap,
+                            byteArray,
+                            bmWidth,
+                            bmHeight
+                        )
+
+                    } else {
+
+                        mobileScannerCallback(
+                            barcodeMap,
+                            null,
+                            null,
+                            null
+                        )
+                    }
                 }
             }
             .addOnFailureListener { e ->
@@ -120,6 +153,13 @@ class MobileScanner(
             }, detectionTimeout)
         }
     }
+
+    private fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
+        val matrix = Matrix()
+        matrix.postRotate(degrees)
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    }
+
 
     // scales the scanWindow to the provided inputImage and checks if that scaled
     // scanWindow contains the barcode
@@ -142,6 +182,34 @@ class MobileScanner(
         return scaledScanWindow.contains(barcodeBoundingBox)
     }
 
+    // Return the best resolution for the actual device orientation.
+    //
+    // By default the resolution is 480x640, which is too low for ML Kit.
+    // If the given resolution is not supported by the display,
+    // the closest available resolution is used.
+    //
+    // The resolution should be adjusted for the display rotation, to preserve the aspect ratio.
+    @Suppress("deprecation")
+    private fun getResolution(cameraResolution: Size): Size {
+        val rotation = if (Build.VERSION.SDK_INT >= 30) {
+            activity.display!!.rotation
+        } else {
+            val windowManager = activity.applicationContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+            windowManager.defaultDisplay.rotation
+        }
+
+        val widthMaxRes = cameraResolution.width
+        val heightMaxRes = cameraResolution.height
+
+        val targetResolution = if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180) {
+            Size(widthMaxRes, heightMaxRes) // Portrait mode
+        } else {
+            Size(heightMaxRes, widthMaxRes) // Landscape mode
+        }
+        return targetResolution
+    }
+
     /**
      * Start barcode scanning by initializing the camera and barcode scanner.
      */
@@ -156,16 +224,22 @@ class MobileScanner(
         torchStateCallback: TorchStateCallback,
         zoomScaleStateCallback: ZoomScaleStateCallback,
         mobileScannerStartedCallback: MobileScannerStartedCallback,
-        detectionTimeout: Long
+        mobileScannerErrorCallback: (exception: Exception) -> Unit,
+        detectionTimeout: Long,
+        cameraResolution: Size?,
+        newCameraResolutionSelector: Boolean
     ) {
         this.detectionSpeed = detectionSpeed
         this.detectionTimeout = detectionTimeout
         this.returnImage = returnImage
 
         if (camera?.cameraInfo != null && preview != null && textureEntry != null) {
-            throw AlreadyStarted()
+            mobileScannerErrorCallback(AlreadyStarted())
+
+            return
         }
 
+        lastScanned = null
         scanner = if (barcodeScannerOptions != null) {
             BarcodeScanning.getClient(barcodeScannerOptions)
         } else {
@@ -177,14 +251,23 @@ class MobileScanner(
 
         cameraProviderFuture.addListener({
             cameraProvider = cameraProviderFuture.get()
+            val numberOfCameras = cameraProvider?.availableCameraInfos?.size
+
             if (cameraProvider == null) {
-                throw CameraError()
+                mobileScannerErrorCallback(CameraError())
+
+                return@addListener
             }
-            cameraProvider!!.unbindAll()
+
+            cameraProvider?.unbindAll()
             textureEntry = textureRegistry.createSurfaceTexture()
 
             // Preview
             val surfaceProvider = Preview.SurfaceProvider { request ->
+                if (isStopped()) {
+                    return@SurfaceProvider
+                }
+
                 val texture = textureEntry!!.surfaceTexture()
                 texture.setDefaultBufferSize(
                     request.resolution.width,
@@ -237,44 +320,68 @@ class MobileScanner(
                 analysis,
             )
 
-            // Register the torch listener
-            camera!!.cameraInfo.torchState.observe(activity) { state ->
-                // TorchState.OFF = 0; TorchState.ON = 1
-                torchStateCallback(state)
+                return@addListener
             }
 
-            // Register the zoom scale listener
-            camera!!.cameraInfo.zoomState.observe(activity) { state ->
-                zoomScaleStateCallback(state.linearZoom.toDouble())
+            camera?.let {
+                // Register the torch listener
+                it.cameraInfo.torchState.observe(activity as LifecycleOwner) { state ->
+                    // TorchState.OFF = 0; TorchState.ON = 1
+                    torchStateCallback(state)
+                }
+
+                // Register the zoom scale listener
+                it.cameraInfo.zoomState.observe(activity) { state ->
+                    zoomScaleStateCallback(state.linearZoom.toDouble())
+                }
+
+                // Enable torch if provided
+                if (it.cameraInfo.hasFlashUnit()) {
+                    it.cameraControl.enableTorch(torch)
+                }
             }
-
-
-            // Enable torch if provided
-            camera!!.cameraControl.enableTorch(torch)
 
             val resolution = analysis.resolutionInfo!!.resolution
-            val portrait = camera!!.cameraInfo.sensorRotationDegrees % 180 == 0
             val width = resolution.width.toDouble()
             val height = resolution.height.toDouble()
+            val portrait = (camera?.cameraInfo?.sensorRotationDegrees ?: 0) % 180 == 0
+
+            // Start with 'unavailable' torch state.
+            var currentTorchState: Int = -1
+
+            camera?.cameraInfo?.let {
+                if (!it.hasFlashUnit()) {
+                    return@let
+                }
+
+                currentTorchState = it.torchState.value ?: -1
+            }
 
             mobileScannerStartedCallback(
                 MobileScannerStartParameters(
                     if (portrait) width else height,
                     if (portrait) height else width,
-                    camera!!.cameraInfo.hasFlashUnit(),
-                    textureEntry!!.id()
+                    currentTorchState,
+                    textureEntry!!.id(),
+                    numberOfCameras ?: 0
                 )
             )
         }, executor)
 
     }
-
     /**
      * Stop barcode scanning.
      */
     fun stop() {
-        if (camera == null && preview == null) {
+        if (isStopped()) {
             throw AlreadyStopped()
+        }
+
+        if (displayListener != null) {
+            val displayManager = activity.applicationContext.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+
+            displayManager.unregisterDisplayListener(displayListener)
+            displayListener = null
         }
 
         val owner = activity as LifecycleOwner
@@ -288,20 +395,28 @@ class MobileScanner(
         cameraProvider = null
     }
 
+    private fun isStopped() = camera == null && preview == null
+
     /**
      * Toggles the flash light on or off.
      */
-    fun toggleTorch(enableTorch: Boolean) {
-        if (camera == null) {
-            throw TorchWhenStopped()
+    fun toggleTorch() {
+        camera?.let {
+            if (!it.cameraInfo.hasFlashUnit()) {
+                return@let
+            }
+
+            when(it.cameraInfo.torchState.value) {
+                TorchState.OFF -> it.cameraControl.enableTorch(true)
+                TorchState.ON -> it.cameraControl.enableTorch(false)
+            }
         }
-        camera!!.cameraControl.enableTorch(enableTorch)
     }
 
     /**
      * Analyze a single image.
      */
-    fun analyzeImage(image: Uri, analyzerCallback: AnalyzerCallback) {
+    fun analyzeImage(image: Uri, onSuccess: AnalyzerSuccessCallback, onError: AnalyzerErrorCallback) {
         val inputImage = InputImage.fromFilePath(activity, image)
 
         scanner.process(inputImage)
@@ -309,15 +424,13 @@ class MobileScanner(
                 val barcodeMap = barcodes.map { barcode -> barcode.data }
 
                 if (barcodeMap.isNotEmpty()) {
-                    analyzerCallback(barcodeMap)
+                    onSuccess(barcodeMap)
                 } else {
-                    analyzerCallback(null)
+                    onSuccess(null)
                 }
             }
             .addOnFailureListener { e ->
-                mobileScannerErrorCallback(
-                    e.localizedMessage ?: e.toString()
-                )
+                onError(e.localizedMessage ?: e.toString())
             }
     }
 
@@ -325,9 +438,9 @@ class MobileScanner(
      * Set the zoom rate of the camera.
      */
     fun setScale(scale: Double) {
-        if (camera == null) throw ZoomWhenStopped()
         if (scale > 1.0 || scale < 0) throw ZoomNotInRange()
-        camera!!.cameraControl.setLinearZoom(scale.toFloat())
+        if (camera == null) throw ZoomWhenStopped()
+        camera?.cameraControl?.setLinearZoom(scale.toFloat())
     }
 
     /**
@@ -335,7 +448,7 @@ class MobileScanner(
      */
     fun resetScale() {
         if (camera == null) throw ZoomWhenStopped()
-        camera!!.cameraControl.setZoomRatio(1f)
+        camera?.cameraControl?.setZoomRatio(1f)
     }
 
 }
