@@ -14,6 +14,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.util.Size
 import android.view.Surface
 import android.view.WindowManager
@@ -342,6 +343,7 @@ class MobileScanner(
                                 ?.toList() ?: emptyList<Size>())
                     }
                     supportedResolutions = supportedResolutions.sortedByDescending { it.width }
+                    Log.d("SCANNER RESOLUTIONS", supportedResolutions.toString())
 
                     val suitableResolutions =
                         supportedResolutions.filter { it.width >= 1920 && ((it.height.toDouble() / it.width.toDouble()) in 0.7..0.8)  }
