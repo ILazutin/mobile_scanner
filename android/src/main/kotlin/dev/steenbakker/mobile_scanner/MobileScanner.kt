@@ -21,6 +21,7 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.TorchState
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -307,9 +308,11 @@ class MobileScanner(
                     selectorBuilder.setResolutionStrategy(
                         ResolutionStrategy(
                             cameraResolution,
-                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                            ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER
                         )
                     )
+                    selectorBuilder.setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                    selectorBuilder.setAllowedResolutionMode(ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE)
                     analysisBuilder.setResolutionSelector(selectorBuilder.build()).build()
                 } else {
                     @Suppress("DEPRECATION")
@@ -328,9 +331,11 @@ class MobileScanner(
                                 selectorBuilder.setResolutionStrategy(
                                     ResolutionStrategy(
                                         cameraResolution,
-                                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER
                                     )
                                 )
+                                selectorBuilder.setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                                selectorBuilder.setAllowedResolutionMode(ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE)
                                 analysisBuilder.setResolutionSelector(selectorBuilder.build()).build()
                             } else {
                                 @Suppress("DEPRECATION")
