@@ -1,10 +1,14 @@
 package dev.steenbakker.mobile_scanner
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.ImageFormat
 import android.graphics.Matrix
 import android.graphics.Rect
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.params.StreamConfigurationMap
 import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Build
@@ -14,6 +18,9 @@ import android.util.Size
 import android.view.Surface
 import android.view.WindowManager
 import androidx.annotation.VisibleForTesting
+import androidx.camera.camera2.internal.compat.CameraManagerCompat
+import androidx.camera.camera2.internal.compat.quirk.CamcorderProfileResolutionQuirk
+import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
@@ -233,6 +240,7 @@ class MobileScanner(
     /**
      * Start barcode scanning by initializing the camera and barcode scanner.
      */
+    @SuppressLint("RestrictedApi", "UnsafeOptInUsageError")
     @ExperimentalGetImage
     fun start(
         barcodeScannerOptions: BarcodeScannerOptions?,
@@ -315,8 +323,33 @@ class MobileScanner(
                     selectorBuilder.setAllowedResolutionMode(ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE)
                     analysisBuilder.setResolutionSelector(selectorBuilder.build()).build()
                 } else {
+                    // Initialize camera to get the cameraInfo and available resolutions
+                    camera = cameraProvider!!.bindToLifecycle(
+                        activity as LifecycleOwner,
+                        cameraPosition,
+                        preview,
+                    )
+
+                    val characteristics = CameraManagerCompat.from(activity).getCameraCharacteristicsCompat(
+                        Camera2CameraInfo.from(camera!!.cameraInfo).cameraId
+                    )
+                    var supportedResolutions = CamcorderProfileResolutionQuirk(characteristics).supportedResolutions
+                    if (Build.VERSION.SDK_INT >= 23) {
+                        val map: StreamConfigurationMap? =
+                            characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                        supportedResolutions =
+                            supportedResolutions + (map?.getHighResolutionOutputSizes(ImageFormat.YUV_420_888)
+                                ?.toList() ?: emptyList<Size>())
+                    }
+                    supportedResolutions = supportedResolutions.sortedByDescending { it.width }
+
+                    val suitableResolutions =
+                        supportedResolutions.filter { it.width >= 1920 && ((it.height.toDouble() / it.width.toDouble()) in 0.7..0.8)  }
+
+                    val targetResolution = suitableResolutions.lastOrNull() ?: supportedResolutions.first()
+
                     @Suppress("DEPRECATION")
-                    analysisBuilder.setTargetResolution(getResolution(cameraResolution))
+                    analysisBuilder.setTargetResolution(targetResolution)
                 }
 
                 if (displayListener == null) {
