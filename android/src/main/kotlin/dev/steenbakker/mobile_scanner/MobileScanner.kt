@@ -4,11 +4,12 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.ImageFormat
 import android.graphics.Matrix
 import android.graphics.Rect
+import android.graphics.SurfaceTexture
+import android.hardware.camera2.CameraAccessException
 import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.params.StreamConfigurationMap
+import android.hardware.camera2.CameraManager
 import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Build
@@ -19,9 +20,6 @@ import android.util.Size
 import android.view.Surface
 import android.view.WindowManager
 import androidx.annotation.VisibleForTesting
-import androidx.camera.camera2.internal.compat.CameraManagerCompat
-import androidx.camera.camera2.internal.compat.quirk.CamcorderProfileResolutionQuirk
-import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
@@ -45,6 +43,7 @@ import dev.steenbakker.mobile_scanner.objects.MobileScannerStartParameters
 import dev.steenbakker.mobile_scanner.utils.YuvToRgbConverter
 import io.flutter.view.TextureRegistry
 import java.io.ByteArrayOutputStream
+import java.util.Arrays
 import kotlin.math.roundToInt
 
 class MobileScanner(
@@ -325,31 +324,8 @@ class MobileScanner(
                     analysisBuilder.setResolutionSelector(selectorBuilder.build()).build()
                 } else {
                     // Initialize camera to get the cameraInfo and available resolutions
-                    camera = cameraProvider!!.bindToLifecycle(
-                        activity as LifecycleOwner,
-                        cameraPosition,
-                        preview,
-                    )
-
-                    val characteristics = CameraManagerCompat.from(activity).getCameraCharacteristicsCompat(
-                        Camera2CameraInfo.from(camera!!.cameraInfo).cameraId
-                    )
-                    var supportedResolutions = CamcorderProfileResolutionQuirk(characteristics).supportedResolutions
-                    if (Build.VERSION.SDK_INT >= 23) {
-                        val map: StreamConfigurationMap? =
-                            characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-                        supportedResolutions =
-                            supportedResolutions + (map?.getHighResolutionOutputSizes(ImageFormat.YUV_420_888)
-                                ?.toList() ?: emptyList<Size>())
-                    }
-                    supportedResolutions = supportedResolutions.sortedByDescending { it.width }
-                    Log.d("SCANNER RESOLUTIONS", supportedResolutions.toString())
-
-                    val suitableResolutions =
-                        supportedResolutions.filter { it.width >= 1920 && ((it.height.toDouble() / it.width.toDouble()) in 0.7..0.8)  }
-
-                    val targetResolution = suitableResolutions.lastOrNull() ?: supportedResolutions.first()
-
+                    val targetResolution = getTargetResolution(cameraPosition.lensFacing!!)
+                    Log.d("SCANNER RESOL.TARGET", targetResolution.toString())
                     @Suppress("DEPRECATION")
                     analysisBuilder.setTargetResolution(targetResolution)
                 }
@@ -373,8 +349,11 @@ class MobileScanner(
                                 selectorBuilder.setAllowedResolutionMode(ResolutionSelector.PREFER_HIGHER_RESOLUTION_OVER_CAPTURE_RATE)
                                 analysisBuilder.setResolutionSelector(selectorBuilder.build()).build()
                             } else {
+                                val targetResolution = getTargetResolution(cameraPosition.lensFacing!!)
+
+                                Log.d("SCANNER RESOL.TARGET", targetResolution.toString())
                                 @Suppress("DEPRECATION")
-                                analysisBuilder.setTargetResolution(getResolution(cameraResolution))
+                                analysisBuilder.setTargetResolution(getResolution(targetResolution))
                             }
                         }
                     }
@@ -557,5 +536,55 @@ class MobileScanner(
         }
 
         stop() // Defer to the stop method, which disposes all resources anyway.
+    }
+
+    private fun getCameraCharacteristics(
+        context: Context, lensFacing: Int
+    ): CameraCharacteristics? {
+        val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        try {
+            val cameraList = Arrays.asList(*cameraManager.cameraIdList)
+            for (availableCameraId in cameraList) {
+                val availableCameraCharacteristics =
+                    cameraManager.getCameraCharacteristics(availableCameraId!!)
+                val availableLensFacing =
+                    availableCameraCharacteristics.get(CameraCharacteristics.LENS_FACING)
+                        ?: continue
+                if (availableLensFacing == lensFacing) {
+                    return availableCameraCharacteristics
+                }
+            }
+        } catch (e: CameraAccessException) {
+            // Accessing camera ID info got error
+        }
+        return null
+    }
+    fun getTargetResolution(lensFacing: Int): Size {
+        val cameraCharacteristics: CameraCharacteristics? =
+            getCameraCharacteristics(
+                activity.applicationContext,
+                lensFacing
+            )
+        val entries: Array<Size?>
+        if (cameraCharacteristics != null) {
+            val map =
+                cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+            val outputSizes = map!!.getOutputSizes(
+                SurfaceTexture::class.java
+            )
+            entries = arrayOfNulls(outputSizes.size)
+            for (i in outputSizes.indices) {
+                entries[i] = outputSizes[i]
+            }
+        } else {
+            entries =
+                arrayOf(
+                    Size(2000, 2000),
+                    Size(1600, 1600),
+                    Size(1200, 1200),
+                )
+        }
+
+        return entries.first()!!
     }
 }
