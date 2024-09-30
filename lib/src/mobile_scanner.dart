@@ -171,6 +171,8 @@ class _MobileScannerState extends State<MobileScanner>
         break;
       case AppLifecycleState.detached:
         break;
+      case AppLifecycleState.hidden:
+        break;
     }
   }
 
