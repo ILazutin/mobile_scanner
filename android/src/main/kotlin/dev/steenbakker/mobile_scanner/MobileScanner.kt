@@ -398,6 +398,7 @@ class MobileScanner(
             }
 
             val resolution = analysis.resolutionInfo!!.resolution
+            Log.d("SCANNER RESOL.IMAGE", resolution.toString())
             val width = resolution.width.toDouble()
             val height = resolution.height.toDouble()
             val portrait = (camera?.cameraInfo?.sensorRotationDegrees ?: 0) % 180 == 0

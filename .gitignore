@@ -120,3 +120,4 @@ app.*.symbols
 
 # FVM Version Cache
 .fvm/
+.fvmrc

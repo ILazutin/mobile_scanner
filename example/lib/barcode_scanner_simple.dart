@@ -44,6 +44,7 @@ class _BarcodeScannerSimpleState extends State<BarcodeScannerSimple> {
         children: [
           MobileScanner(
             controller: MobileScannerController(
+              useNewCameraSelector: true,
               cameraResolution: const Size(2000, 2000),
             ),
             onDetect: _handleBarcode,
